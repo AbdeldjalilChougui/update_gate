@@ -1,0 +1,30 @@
+name: update_gate
+description: >-
+  Forced and optional app-update prompts for Flutter, independent of where the
+  version rules come from. Fails open, localised in en, fr and ar, RTL ready.
+version: 0.1.0
+homepage: https://abdeldjalilchougui.biz/
+repository: https://github.com/AbeldjalilChougui/update_gate
+issue_tracker: https://github.com/AbeldjalilChougui/update_gate/issues
+topics:
+  - update
+  - version
+  - force-update
+  - app-update
+  - semver
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_localizations:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
