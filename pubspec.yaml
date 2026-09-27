@@ -4,8 +4,8 @@ description: >-
   version rules come from. Fails open, localised in en, fr and ar, RTL ready.
 version: 0.1.0
 homepage: https://abdeldjalilchougui.biz/
-repository: https://github.com/AbeldjalilChougui/update_gate
-issue_tracker: https://github.com/AbeldjalilChougui/update_gate/issues
+repository: https://github.com/AbdeldjalilChougui/update_gate
+issue_tracker: https://github.com/AbdeldjalilChougui/update_gate/issues
 topics:
   - update
   - version
