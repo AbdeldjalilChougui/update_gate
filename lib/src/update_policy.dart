@@ -62,6 +62,7 @@ class UpdatePolicy {
     this.minRequiredVersion,
     this.latestVersion,
     this.storeUrl,
+    this.forceUpdate = false,
     Duration? remindAfter,
     this.titles = const {},
     this.messages = const {},
@@ -76,6 +77,7 @@ class UpdatePolicy {
   ///   "latest_version": "1.4.0+52",
   ///   "store_url": "https://play.google.com/store/apps/details?id=my.app",
   ///   "remind_after_hours": 24,
+  ///   "force_update": false,
   ///   "title": {"en": "New version", "fr": "Nouvelle version"},
   ///   "message": {"en": "Faster sync.", "ar": "مزامنة أسرع."},
   ///   "platforms": {"ios": {"store_url": "https://apps.apple.com/app/id1"}}
@@ -120,6 +122,7 @@ class UpdatePolicy {
       latestVersion: version(json['latest_version']),
       storeUrl:
           json['store_url'] is String ? json['store_url']! as String : null,
+      forceUpdate: json['force_update'] == true,
       remindAfter: hours is num && hours >= 0
           ? Duration(minutes: (hours * 60).round())
           : null,
@@ -143,6 +146,11 @@ class UpdatePolicy {
   /// Where the update button leads.
   final String? storeUrl;
 
+  /// Forces the update whatever the running version is, for example when
+  /// the server answered `426 Upgrade Required`. A platform override can
+  /// turn it on but not off.
+  final bool forceUpdate;
+
   final Duration? _remindAfter;
 
   /// How long "Later" hides the optional prompt for the same latest version.
@@ -157,6 +165,28 @@ class UpdatePolicy {
   /// Per-platform overrides. Their unset fields fall back to this policy.
   final Map<UpdatePlatform, UpdatePolicy> platforms;
 
+  /// A copy with the given fields replaced. A null argument keeps the field.
+  UpdatePolicy copyWith({
+    String? minRequiredVersion,
+    String? latestVersion,
+    String? storeUrl,
+    bool? forceUpdate,
+    Duration? remindAfter,
+    Map<String, String>? titles,
+    Map<String, String>? messages,
+    Map<UpdatePlatform, UpdatePolicy>? platforms,
+  }) =>
+      UpdatePolicy(
+        minRequiredVersion: minRequiredVersion ?? this.minRequiredVersion,
+        latestVersion: latestVersion ?? this.latestVersion,
+        storeUrl: storeUrl ?? this.storeUrl,
+        forceUpdate: forceUpdate ?? this.forceUpdate,
+        remindAfter: remindAfter ?? _remindAfter,
+        titles: titles ?? this.titles,
+        messages: messages ?? this.messages,
+        platforms: platforms ?? this.platforms,
+      );
+
   /// This policy with the override for [platform] applied.
   UpdatePolicy resolve(UpdatePlatform platform) {
     final o = platforms[platform];
@@ -165,6 +195,7 @@ class UpdatePolicy {
       minRequiredVersion: o.minRequiredVersion ?? minRequiredVersion,
       latestVersion: o.latestVersion ?? latestVersion,
       storeUrl: o.storeUrl ?? storeUrl,
+      forceUpdate: o.forceUpdate || forceUpdate,
       remindAfter: o._remindAfter ?? _remindAfter,
       titles: {...titles, ...o.titles},
       messages: {...messages, ...o.messages},

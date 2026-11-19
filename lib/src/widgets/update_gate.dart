@@ -1,3 +1,6 @@
+/// @docImport '../response_signal_source.dart';
+library;
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -11,7 +14,11 @@ import 'forced_update_page.dart';
 import 'optional_update_dialog.dart';
 import 'update_prompt.dart';
 
-/// Checks for updates once when first built, then prompts.
+/// Checks for updates when first built, then prompts.
+///
+/// When [source] is also a [Listenable] (such as [ResponseSignalSource]),
+/// the gate checks again each time it notifies, so a forced update can
+/// appear in the middle of a session. Other sources are checked once.
 ///
 /// - Forced: pushes a full-screen page that back navigation cannot pop.
 /// - Optional: shows a dismissible dialog, at most once per
@@ -59,7 +66,8 @@ class UpdateGate extends StatefulWidget {
   /// Where "Later" is remembered. Defaults to memory only.
   final RemindLaterStore? remindLaterStore;
 
-  /// Called once with the decision, including [UpdateKind.none] on errors.
+  /// Called with the decision of every check, including [UpdateKind.none]
+  /// on errors.
   final ValueChanged<UpdateDecision>? onDecision;
 
   /// Which per-platform override to use. Defaults to the running platform.
@@ -95,10 +103,62 @@ class _UpdateGateState extends State<UpdateGate> {
   late final RemindLaterStore _store =
       widget.remindLaterStore ?? InMemoryRemindLaterStore();
 
+  bool _checking = false;
+  bool _checkAgain = false;
+  bool _forcedShown = false;
+  bool _optionalShowing = false;
+
   @override
   void initState() {
     super.initState();
-    unawaited(_run());
+    _listen(widget.source);
+    unawaited(_check());
+  }
+
+  @override
+  void didUpdateWidget(UpdateGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.source, widget.source)) {
+      _unlisten(oldWidget.source);
+      _listen(widget.source);
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlisten(widget.source);
+    super.dispose();
+  }
+
+  void _listen(UpdatePolicySource source) {
+    if (source is Listenable) (source as Listenable).addListener(_onSource);
+  }
+
+  void _unlisten(UpdatePolicySource source) {
+    if (source is Listenable) {
+      (source as Listenable).removeListener(_onSource);
+    }
+  }
+
+  void _onSource() {
+    if (mounted) unawaited(_check());
+  }
+
+  /// Runs one check at a time; a signal during a check queues one more.
+  Future<void> _check() async {
+    if (_checking) {
+      _checkAgain = true;
+      return;
+    }
+    _checking = true;
+    try {
+      do {
+        _checkAgain = false;
+        await _run();
+      } while (_checkAgain && mounted);
+    } finally {
+      _checking = false;
+    }
   }
 
   Future<void> _run() async {
@@ -107,9 +167,11 @@ class _UpdateGateState extends State<UpdateGate> {
     widget.onDecision?.call(decision);
     switch (decision.kind) {
       case UpdateKind.forced:
-        _showForced(decision);
+        if (!_forcedShown) _showForced(decision);
       case UpdateKind.optional:
-        await _maybeShowOptional(decision);
+        if (!_forcedShown && !_optionalShowing) {
+          unawaited(_maybeShowOptional(decision));
+        }
       case UpdateKind.none:
         break;
     }
@@ -170,21 +232,33 @@ class _UpdateGateState extends State<UpdateGate> {
       _debug('no Navigator found; pass navigatorKey. No prompt shown.');
       return;
     }
+    _forcedShown = true;
     final builder = widget.forcedBuilder ??
         (context, prompt) => ForcedUpdatePage(prompt: prompt);
-    unawaited(navigator.push(MaterialPageRoute<void>(
-      settings: const RouteSettings(name: 'update_gate/forced'),
-      builder: (context) => PopScope(
-        canPop: false,
-        child: builder(
-          context,
-          _prompt(context, decision, onUpdate: () => _openStore(decision)),
-        ),
-      ),
-    )));
+    unawaited(navigator
+        .push(MaterialPageRoute<void>(
+          settings: const RouteSettings(name: 'update_gate/forced'),
+          builder: (context) => PopScope(
+            canPop: false,
+            child: builder(
+              context,
+              _prompt(context, decision, onUpdate: () => _openStore(decision)),
+            ),
+          ),
+        ))
+        .whenComplete(() => _forcedShown = false));
   }
 
   Future<void> _maybeShowOptional(UpdateDecision decision) async {
+    _optionalShowing = true;
+    try {
+      await _showOptional(decision);
+    } finally {
+      _optionalShowing = false;
+    }
+  }
+
+  Future<void> _showOptional(UpdateDecision decision) async {
     final version = '${decision.latestVersion}';
     final interval =
         decision.policy?.remindAfter ?? UpdatePolicy.defaultRemindAfter;

@@ -42,6 +42,8 @@ class UpdateDecision {
   /// Pure and total: it never throws. It **fails open**, returning
   /// [UpdateKind.none] when the policy is null, the current version is
   /// missing or junk, a configured rule version is junk, or no rule is set.
+  /// The one exception is [UpdatePolicy.forceUpdate], an explicit order
+  /// from the server: it gives [UpdateKind.forced] whatever the versions.
   /// An empty rule string counts as not set. [platform] picks the
   /// per-platform override and defaults to [UpdatePlatform.current].
   static UpdateDecision evaluate({
@@ -53,12 +55,23 @@ class UpdateDecision {
       if (policy == null) return const UpdateDecision.none();
       final rules = policy.resolve(platform ?? UpdatePlatform.current);
       final current = AppVersion.tryParse(currentVersion);
-      if (current == null) return const UpdateDecision.none();
 
       final minRaw = rules.minRequiredVersion?.trim() ?? '';
       final latestRaw = rules.latestVersion?.trim() ?? '';
       final min = minRaw.isEmpty ? null : AppVersion.tryParse(minRaw);
       final latest = latestRaw.isEmpty ? null : AppVersion.tryParse(latestRaw);
+
+      if (rules.forceUpdate) {
+        return UpdateDecision(
+          kind: UpdateKind.forced,
+          currentVersion: current,
+          minRequiredVersion: min,
+          latestVersion: latest,
+          storeUrl: _parseUrl(rules.storeUrl),
+          policy: rules,
+        );
+      }
+      if (current == null) return const UpdateDecision.none();
       if ((minRaw.isNotEmpty && min == null) ||
           (latestRaw.isNotEmpty && latest == null) ||
           (min == null && latest == null)) {

@@ -4,6 +4,7 @@ library;
 
 export 'src/app_version.dart';
 export 'src/remind_later.dart';
+export 'src/response_signal_source.dart';
 export 'src/sources.dart';
 export 'src/strings.dart';
 export 'src/update_decision.dart';
